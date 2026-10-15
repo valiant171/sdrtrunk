@@ -68,11 +68,6 @@ public class RTL2832TunerController extends USBTunerController
     private long mTunedFrequency = 0;
     private boolean mBiasTEnabled = false;
 
-    /**
-     * Abstract tuner controller device.  Use the static gettype() method
-     * to determine the tuner type, and construct the corresponding child
-     * tuner controller class for that tuner type.
-     */
     public RTL2832TunerController(int bus, String portAddress, ITunerErrorListener tunerErrorListener)
     {
         super(bus, portAddress, tunerErrorListener);
@@ -96,9 +91,6 @@ public class RTL2832TunerController extends USBTunerController
         return getTransferBufferSize() / 2;
     }
 
-    /**
-     * The embedded tuner used with this RTL2832 USB tuner
-     */
     public EmbeddedTuner getEmbeddedTuner()
     {
         return mEmbeddedTuner;
@@ -109,11 +101,6 @@ public class RTL2832TunerController extends USBTunerController
         return mEmbeddedTuner != null;
     }
 
-    /**
-     * Sets the tuned frequency in the embedded tuner
-     * @param frequency in Hertz
-     * @throws SourceException if there is an error
-     */
     @Override
     public void setTunedFrequency(long frequency) throws SourceException
     {
@@ -130,7 +117,6 @@ public class RTL2832TunerController extends USBTunerController
     @Override
     public void apply(TunerConfiguration tunerConfig) throws SourceException
     {
-        //Invoke super for frequency, frequency correction and autoPPM
         super.apply(tunerConfig);
 
         if(tunerConfig instanceof RTL2832TunerConfiguration rtl)
@@ -140,14 +126,9 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Executes additional device startup actions after being commanded by the parent USB startup actions.
-     * @throws SourceException if there is an error/issue making this device is unusable
-     */
     @Override
     protected void deviceStart() throws SourceException
     {
-        //Perform dummy write to see if device needs reset
         boolean resetRequired = false;
 
         try
@@ -182,12 +163,10 @@ public class RTL2832TunerController extends USBTunerController
             }
         }
 
-
         byte[] eeprom = null;
 
         try
         {
-            /* Read the contents of the 256-byte EEPROM */
             eeprom = readEEPROM((short) 0, 256);
         }
         catch(Exception e)
@@ -256,17 +235,10 @@ public class RTL2832TunerController extends USBTunerController
         }
         catch(Exception e)
         {
-//            mLog.error("Error on device stop", e);
             //No-op
         }
     }
 
-    /**
-     * Descriptor contains all identifiers and labels parsed from the EEPROM.
-     *
-     * May return null if unable to get 256 byte eeprom descriptor from tuner or if the descriptor doesn't begin with
-     * byte values of 0x28 and 0x32 meaning it is a valid (and can be parsed) RTL2832 descriptor
-     */
     public Descriptor getDescriptor()
     {
         if(mDescriptor != null && mDescriptor.isValid())
@@ -277,10 +249,6 @@ public class RTL2832TunerController extends USBTunerController
         return null;
     }
 
-    /**
-     * Sets the enabled state of the bias-t
-     * @param enabled true to turn-on the bias-t or false to turn-off the bias-t.
-     */
     public void setBiasT(boolean enabled)
     {
         setGPIOOutput((byte)0x01);
@@ -288,10 +256,6 @@ public class RTL2832TunerController extends USBTunerController
         mBiasTEnabled = enabled;
     }
 
-    /**
-     * Indicates if the bias-t is enabled.
-     * @return true if enabled.
-     */
     public boolean isBiasT()
     {
         return mBiasTEnabled;
@@ -300,23 +264,11 @@ public class RTL2832TunerController extends USBTunerController
     private void setIFFrequency(int frequency) throws LibUsbException
     {
         long ifFrequency = ((long) TWO_TO_22_POWER * (long) frequency) / (long) mOscillatorFrequency * -1;
-
-        /* Write byte 2 (high) */
         writeDemodRegister(Page.ONE, (short) 0x19, (short) (Long.rotateRight(ifFrequency, 16) & 0x3F), 1);
-
-        /* Write byte 1 (middle) */
         writeDemodRegister(Page.ONE, (short) 0x1A, (short) (Long.rotateRight(ifFrequency, 8) & 0xFF), 1);
-
-        /* Write byte 0 (low) */
         writeDemodRegister(Page.ONE, (short) 0x1B, (short) (ifFrequency & 0xFF), 1);
     }
 
-    /**
-     * Provides a unique identifier to use in distinctly identifying this tuner from among other tuners of the same
-     * type, so that we can fetch a tuner configuration from the settings manager for this specific tuner.
-     *
-     * @return serial number of the device
-     */
     public String getUniqueID()
     {
         if(mDescriptor != null)
@@ -344,19 +296,11 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Sets the filters for the sample rate
-     * @param sampleRate to setup
-     * @throws SourceException if there is an error
-     */
     public void setSampleRateFilters(int sampleRate) throws SourceException
     {
         getEmbeddedTuner().setSampleRateFilters(sampleRate);
     }
 
-    /**
-     * Identifies the embedded tuner type
-     */
     public TunerType getTunerType()
     {
         if(getEmbeddedTuner() != null)
@@ -367,11 +311,6 @@ public class RTL2832TunerController extends USBTunerController
         return TunerType.UNKNOWN;
     }
 
-    /**
-     * Identifies the embedded tuner type
-     * @return tuner type
-     * @throws SourceException if there is an error
-     */
     private TunerType identifyTunerType() throws SourceException
     {
         TunerType tunerClass = TunerType.UNKNOWN;
@@ -379,10 +318,8 @@ public class RTL2832TunerController extends USBTunerController
         try
         {
             enableI2CRepeater(true);
-
             boolean controlI2CRepeater = false;
 
-            /* Test for each tuner type until we find the correct one */
             if(isTuner(TunerTypeCheck.E4K, controlI2CRepeater))
             {
                 tunerClass = TunerType.ELONICS_E4000;
@@ -424,40 +361,27 @@ public class RTL2832TunerController extends USBTunerController
         resetUSBBuffer();
     }
 
-    /**
-     * Resets the USB buffer
-     * @throws LibUsbException if there is an error
-     */
     public void resetUSBBuffer() throws LibUsbException
     {
         writeRegister(Block.USB, Address.USB_EPA_CTL, 0x1002, 2);
         writeRegister(Block.USB, Address.USB_EPA_CTL, 0x0000, 2);
     }
 
-    /**
-     * Initializes the RF baseband system
-     * @throws LibUsbException if there is an error
-     */
     public void initBaseband() throws LibUsbException
     {
-        /* Initialize USB */
         writeRegister(Block.USB, Address.USB_SYSCTL, 0x09, 1);
         writeRegister(Block.USB, Address.USB_EPA_MAXPKT, 0x0002, 2);
         writeRegister(Block.USB, Address.USB_EPA_CTL, 0x1002, 2);
 
-        /* Power on demod */
         writeRegister(Block.SYS, Address.DEMOD_CTL_1, 0x22, 1);
         writeRegister(Block.SYS, Address.DEMOD_CTL, 0xE8, 1);
 
-        /* Reset demod */
-        writeDemodRegister(Page.ONE, (short) 0x01, 0x14, 1); //Bit 3 = soft reset
+        writeDemodRegister(Page.ONE, (short) 0x01, 0x14, 1);
         writeDemodRegister(Page.ONE, (short) 0x01, 0x10, 1);
 
-        /* Disable spectrum inversion and adjacent channel rejection */
         writeDemodRegister(Page.ONE, (short) 0x15, 0x00, 1);
         writeDemodRegister(Page.ONE, (short) 0x16, 0x0000, 2);
 
-        /* Clear DDC shift and IF frequency registers */
         writeDemodRegister(Page.ONE, (short) 0x16, 0x00, 1);
         writeDemodRegister(Page.ONE, (short) 0x17, 0x00, 1);
         writeDemodRegister(Page.ONE, (short) 0x18, 0x00, 1);
@@ -465,64 +389,30 @@ public class RTL2832TunerController extends USBTunerController
         writeDemodRegister(Page.ONE, (short) 0x1A, 0x00, 1);
         writeDemodRegister(Page.ONE, (short) 0x1B, 0x00, 1);
 
-        /* Set FIR coefficients */
         for(int x = 0; x < FIR_FILTER_COEFFICIENTS.length; x++)
         {
             writeDemodRegister(Page.ONE, (short) (0x1C + x), FIR_FILTER_COEFFICIENTS[x], 1);
         }
 
-        /* Enable SDR mode, disable DAGC (bit 5) */
         writeDemodRegister(Page.ZERO, (short) 0x19, 0x05, 1);
-
-        /* Init FSM state-holding register */
         writeDemodRegister(Page.ONE, (short) 0x93, 0xF0, 1);
         writeDemodRegister(Page.ONE, (short) 0x94, 0x0F, 1);
-
-        /* Disable AGC (en_dagc, bit 0) (seems to have no effect) */
         writeDemodRegister(Page.ONE, (short) 0x11, 0x00, 1);
-
-        /* Disable RF and IF AGC loop */
         writeDemodRegister(Page.ONE, (short) 0x04, 0x00, 1);
-
-        /* Disable PID filter */
         writeDemodRegister(Page.ZERO, (short) 0x61, 0x60, 1);
-
-        /* opt_adc_iq = 0, default ADC_I/ADC_Q datapath */
         writeDemodRegister(Page.ZERO, (short) 0x06, 0x80, 1);
-
-        /* Enable Zero-if mode (en_bbin bit),
-         *        DC cancellation (en_dc_est),
-         *        IQ estimation/compensation (en_iq_comp, en_iq_est) */
         writeDemodRegister(Page.ONE, (short) 0xB1, 0x1B, 1);
-
-        /* Disable 4.096 MHz clock output on pin TP_CK0 */
         writeDemodRegister(Page.ZERO, (short) 0x0D, 0x83, 1);
     }
 
-    /**
-     * Turns off the RF baseband system
-     * @throws IllegalArgumentException never
-     * @throws UsbDisconnectedException of the device is no longer accessible
-     */
     private void deinitBaseband() throws IllegalArgumentException, UsbDisconnectedException
     {
         writeRegister(Block.SYS, Address.DEMOD_CTL, 0x20, 1);
     }
 
-    /**
-     * Sets the General Purpose Input/Output (GPIO) register bit
-     *
-     * @param bitMask - bit mask with one for targeted register bits and zero for the non-targeted register bits
-     * @param enabled - true to set the bit and false to clear the bit
-     * @throws UsbDisconnectedException - if the tuner device is disconnected
-     * @throws UsbException             - if there is a USB error while communicating with the device
-     */
     private void setGPIOBit(byte bitMask, boolean enabled) throws LibUsbException
     {
-        //Get current register value
         int value = readRegister(Block.SYS, Address.GPO, 1);
-
-        //Update the masked bits
         if(enabled)
         {
             value |= bitMask;
@@ -531,68 +421,33 @@ public class RTL2832TunerController extends USBTunerController
         {
             value &= ~bitMask;
         }
-
-        //Write the change back to the device
         writeRegister(Block.SYS, Address.GPO, value, 1);
     }
 
-    /**
-     * Enables GPIO Output
-     *
-     * @param bitMask - mask containing one bit value in targeted bit field(s)
-     * @throws UsbDisconnectedException
-     * @throws UsbException
-     */
     private void setGPIOOutput(byte bitMask) throws LibUsbException
     {
-        //Get current register value
         int value = readRegister(Block.SYS, Address.GPD, 1);
-
-        //Mask the value and rewrite it
         writeRegister(Block.SYS, Address.GPO, value & ~bitMask, 1);
-
-        //Get current register value
         value = readRegister(Block.SYS, Address.GPOE, 1);
-
-        //Mask the value and rewrite it
         writeRegister(Block.SYS, Address.GPOE, value | bitMask, 1);
     }
 
-    /**
-     * Enables or disables the I2C repeater
-     * @param enabled to turn I2C on or off
-     * @throws LibUsbException if there is an error
-     */
-    private void enableI2CRepeater(boolean enabled) throws LibUsbException
+    public void enableI2CRepeater(boolean enabled) throws LibUsbException
     {
         short address = 1;
         int value = (enabled ? 0x18 : 0x10);
-
         boolean isEnabledAlready = isI2CRepeaterEnabled();
         if (isEnabledAlready != enabled) {
-           // mLog.info("trying to " + (enabled ? "enable" : "disable") + " i2c repeater, which is currently " + (isEnabledAlready ? "enabled" : "disabled"));
             writeDemodRegister(Page.ONE, address, value, 1);
         }
     }
 
-    /**
-     * Indicates if the I2C repeater is currently enabled or turned on.
-     */
-    private boolean isI2CRepeaterEnabled()
+    public boolean isI2CRepeaterEnabled()
     {
         return readDemodRegister(Page.ONE, (short) 0x1, 1) == 0x18;
     }
 
-    /**
-     * Reads the I2C register
-     * @param i2CAddress address of the register
-     * @param i2CRegister register
-     * @param controlI2CRepeater set to true to have this method turn repeater on/off for this invocation or false if
-     * the repeater has already been enabled.
-     * @return register value
-     * @throws LibUsbException if there is an error
-     */
-    private int readI2CRegister(byte i2CAddress, byte i2CRegister, boolean controlI2CRepeater) throws LibUsbException
+    public int readI2CRegister(byte i2CAddress, byte i2CRegister, boolean controlI2CRepeater) throws LibUsbException
     {
         short address = (short) (i2CAddress & 0xFF);
         ByteBuffer buffer = ByteBuffer.allocateDirect(1);
@@ -616,24 +471,13 @@ public class RTL2832TunerController extends USBTunerController
         return (data.get() & 0xFF);
     }
 
-    /**
-     * Writes to the I2C register
-     * @param i2CAddress of the register
-     * @param i2CRegister register
-     * @param value to write
-     * @param controlI2CRepeater set to true to have this method turn repeater on/off for this invocation or false if
-     * the repeater has already been enabled.
-     * @throws LibUsbException if there is an error
-     */
-    private void writeI2CRegister(byte i2CAddress, byte i2CRegister, byte value, boolean controlI2CRepeater)
+    public void writeI2CRegister(byte i2CAddress, byte i2CRegister, byte value, boolean controlI2CRepeater)
             throws LibUsbException
     {
-
         short address = (short) (i2CAddress & 0xFF);
         ByteBuffer buffer = ByteBuffer.allocateDirect(2);
         buffer.put(i2CRegister);
         buffer.put(value);
-
         buffer.rewind();
 
         if(controlI2CRepeater)
@@ -648,14 +492,6 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Writes to the demod register
-     * @param page of register
-     * @param address of resister
-     * @param value to write
-     * @param length of value in bytes
-     * @throws LibUsbException on error
-     */
     private void writeDemodRegister(Page page, short address, int value, int length) throws LibUsbException
     {
         ByteBuffer buffer = ByteBuffer.allocateDirect(length);
@@ -671,8 +507,7 @@ public class RTL2832TunerController extends USBTunerController
         }
         else
         {
-            throw new IllegalArgumentException("Cannot write value greater than 16 bits to the register - length [" +
-                    length + "]");
+            throw new IllegalArgumentException("Cannot write value greater than 16 bits to the register");
         }
 
         short index = (short) (0x10 | page.getPage());
@@ -681,21 +516,11 @@ public class RTL2832TunerController extends USBTunerController
         readDemodRegister(Page.TEN, (short) 1, length);
     }
 
-    /**
-     * Reads the demod register
-     * @param page of register
-     * @param address of register
-     * @param length of value to read in bytes
-     * @return value read
-     * @throws LibUsbException on error
-     */
     private int readDemodRegister(Page page, short address, int length) throws LibUsbException
     {
         short index = page.getPage();
         short newAddress = (short) ((address << 8) | 0x20);
-
         ByteBuffer buffer = ByteBuffer.allocateDirect(length);
-
         read(newAddress, index, buffer);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
 
@@ -709,14 +534,6 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Writes a value to the register
-     * @param block of register
-     * @param address of register
-     * @param value to write
-     * @param length of value in bytes
-     * @throws LibUsbException on error
-     */
     private void writeRegister(Block block, Address address, int value, int length) throws LibUsbException
     {
         ByteBuffer buffer = ByteBuffer.allocateDirect(length);
@@ -732,22 +549,13 @@ public class RTL2832TunerController extends USBTunerController
         }
         else
         {
-            throw new IllegalArgumentException("Cannot write value greater than 16 bits to the register - length [" +
-                    length + "]");
+            throw new IllegalArgumentException("Cannot write value greater than 16 bits to the register");
         }
 
         buffer.rewind();
         write(address.getAddress(), block, buffer);
     }
 
-    /**
-     * Reads a value from a register
-     * @param block of register
-     * @param address of register
-     * @param length of value to read
-     * @return value read
-     * @throws LibUsbException on error
-     */
     private int readRegister(Block block, Address address, int length) throws LibUsbException
     {
         ByteBuffer buffer = ByteBuffer.allocateDirect(2);
@@ -764,25 +572,11 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Writes a value
-     * @param address of register
-     * @param block of register
-     * @param buffer containing value to write
-     * @throws LibUsbException on error
-     */
     private void write(short address, Block block, ByteBuffer buffer) throws LibUsbException
     {
         write(address, block.getWriteIndex(), buffer);
     }
 
-    /**
-     * Performs a control type write
-     * @param value to write
-     * @param index to write value to
-     * @param buffer contents to write
-     * @throws LibUsbException if there is an error
-     */
     private void write(short value, short index, ByteBuffer buffer) throws LibUsbException
     {
         if(hasDeviceHandle())
@@ -796,8 +590,7 @@ public class RTL2832TunerController extends USBTunerController
             }
             else if(transferred != buffer.capacity())
             {
-                throw new LibUsbException("transferred bytes [" + transferred + "] is not what was expected [" +
-                    buffer.capacity() + "]", transferred);
+                throw new LibUsbException("transferred bytes do not match expected capacity", transferred);
             }
         }
         else
@@ -806,12 +599,6 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Performs a control type read
-     * @param address to read
-     * @param index to read
-     * @param buffer to store read content
-     */
     private void read(short address, short index, ByteBuffer buffer) throws LibUsbException
     {
         if(isRunning())
@@ -825,39 +612,23 @@ public class RTL2832TunerController extends USBTunerController
             }
             else if(transferred != buffer.capacity())
             {
-                throw new LibUsbException("transferred bytes [" + transferred + "] is not what was expected [" +
-                        buffer.capacity() + "]", transferred);
+                throw new LibUsbException("transferred bytes do not match expected capacity", transferred);
             }
         }
     }
 
-    /**
-     * Reads byte array from index at the address.
-     *
-     * @return big-endian byte array (needs to be swapped to be usable)
-     */
     private void read(short address, Block block, ByteBuffer buffer) throws LibUsbException
     {
         read(address, block.getReadIndex(), buffer);
     }
 
-    /**
-     * Tests if the specified tuner type is contained in the usb tuner device.
-     *
-     * @param type - tuner type to test for
-     * @param controlI2CRepeater - indicates if the method should control the I2C repeater independently
-     * @return - true if the device is the specified tuner type
-     */
     private boolean isTuner(TunerTypeCheck type, boolean controlI2CRepeater)
     {
         try
         {
             if(type == TunerTypeCheck.FC0012 || type == TunerTypeCheck.FC2580)
             {
-                /* Initialize the GPIOs */
                 setGPIOOutput((byte) 0x20);
-
-                /* Reset tuner before probing */
                 setGPIOBit((byte) 0x20, true);
                 setGPIOBit((byte) 0x20, false);
             }
@@ -875,7 +646,7 @@ public class RTL2832TunerController extends USBTunerController
         }
         catch(LibUsbException e)
         {
-            //Do nothing ... it's not the specified tuner
+            //Do nothing
         }
 
         return false;
@@ -889,7 +660,6 @@ public class RTL2832TunerController extends USBTunerController
     public int getSampleRateFromTuner() throws SourceException
     {
         int returnRate = DEFAULT_SAMPLE_RATE.getRate();
-
         getLock().lock();
 
         try
@@ -898,10 +668,8 @@ public class RTL2832TunerController extends USBTunerController
             int low = readDemodRegister(Page.ONE, (short) 0xA1, 2);
             int ratio = Integer.rotateLeft(high, 16) | low;
             int rate = (mOscillatorFrequency * TWO_TO_22_POWER / ratio);
-
             SampleRate sampleRate = SampleRate.getClosest(rate);
 
-            /* If we're not currently set to this rate, set it as the current rate */
             if(sampleRate.getRate() != rate)
             {
                 setSampleRate(sampleRate);
@@ -920,38 +688,22 @@ public class RTL2832TunerController extends USBTunerController
         return returnRate;
     }
 
-    /**
-     * Sets the sampling rate of the RTL2832
-     * @param sampleRate to apply
-     * @throws SourceException
-     */
     public void setSampleRate(SampleRate sampleRate) throws SourceException
     {
         getLock().lock();
 
         try
         {
-            /* Write high-order 16-bits of sample rate ratio to demod register */
             writeDemodRegister(Page.ONE, (short) 0x9F, sampleRate.getRatioHighBits(), 2);
-
-            /* Write low-order 16-bits of sample rate ratio to demod register.
-             * Note: none of the defined rates have a low order ratio value, so we
-             * simply write a zero to the register */
             writeDemodRegister(Page.ONE, (short) 0xA1, 0, 2);
-
-            /* Set sample rate correction to 0 */
             setSampleRateFrequencyCorrection(0);
 
-            /* Reset the demod for the changes to take effect */
             writeDemodRegister(Page.ONE, (short) 0x01, 0x14, 1);
             writeDemodRegister(Page.ONE, (short) 0x01, 0x10, 1);
 
-            /* Apply any tuner specific sample rate filter settings */
             setSampleRateFilters(sampleRate.getRate());
             mSampleRate = sampleRate;
             mFrequencyController.setSampleRate(sampleRate.getRate());
-
-            //Updates native buffer factory so that sample buffers can be accurately timestamped
             getNativeBufferFactory().setSamplesPerMillisecond(sampleRate.getRate() / 1000.0f);
         }
         finally
@@ -960,20 +712,11 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    /**
-     * Determines the size of USB transfer buffers according to the sample rate
-     */
-    private int getUSBTransferBufferSize(double sampleRate)
-    {
-        return USB_TRANSFER_BUFFER_SIZE;
-    }
-
     public void setSampleRateFrequencyCorrection(int ppm) throws SourceException
     {
         int offset = -ppm * TWO_TO_22_POWER / 1_000_000;
         writeDemodRegister(Page.ONE, (short) 0x3F, (offset & 0xFF), 1);
         writeDemodRegister(Page.ONE, (short) 0x3E, (Integer.rotateRight(offset, 8) & 0xFF), 1);
-        /* Test to retune controller to apply frequency correction */
         try
         {
             mFrequencyController.setFrequency(mFrequencyController.getFrequency());
@@ -984,38 +727,11 @@ public class RTL2832TunerController extends USBTunerController
         }
     }
 
-    public int getSampleRateFrequencyCorrection() throws UsbException
-    {
-        int high = readDemodRegister(Page.ONE, (short) 0x3E, 1);
-        int low = readDemodRegister(Page.ONE, (short) 0x3F, 1);
-        return (Integer.rotateLeft(high, 8) | low);
-    }
-
-    /**
-     * Returns contents of the 256-byte EEPROM.  The contents are as follows:
-     *
-     * 256-byte EEPROM (in hex):
-     * 00/01 - 2832 Signature
-     * 03/02 - 0BDA Vendor ID
-     * 05/04 - 2832 Product ID
-     * 06 - A5 (has serial id?)
-     * 07 - 16 (bit field - bit 0 = remote wakeup, bit 1 = IR enabled
-     * 08 - 02 or 12
-     * 10/09 0310 ETX(0x03) plus label length (includes length and ETX bytes)
-     * 12/11 First UTF-16 character
-     * 14/13 Second UTF-16 character ...
-     *
-     * Label 1: vendor
-     * Label 2: product
-     * Label 3: serial
-     * Label 4,5 ... (user defined)
-     */
     public byte[] readEEPROM(short offset, int length) throws IllegalArgumentException
     {
         if(offset + length > 256)
         {
-            throw new IllegalArgumentException("cannot read more than 256 bytes from EEPROM - requested read to byte [" +
-                    (offset + length) + "]");
+            throw new IllegalArgumentException("cannot read more than 256 bytes from EEPROM");
         }
 
         byte[] data = new byte[length];
@@ -1023,13 +739,11 @@ public class RTL2832TunerController extends USBTunerController
 
         try
         {
-            /* Tell the RTL-2832 to address the EEPROM */
             writeRegister(Block.I2C, Address.EEPROM, (byte) offset, 1);
         }
         catch(LibUsbException e)
         {
-            mLog.error("usb error while attempting to set read address to EEPROM register, prior to reading the EEPROM " +
-                    "device descriptor", e);
+            mLog.error("usb error while attempting to set read address to EEPROM", e);
         }
 
         for(int x = 0; x < length; x++)
@@ -1042,8 +756,6 @@ public class RTL2832TunerController extends USBTunerController
             }
             catch(Exception e)
             {
-                mLog.error("error while reading eeprom byte [" + x + "/" + length + "] aborting eeprom read and " +
-                        "returning partially filled descriptor byte array", e);
                 x = length;
             }
         }
@@ -1051,78 +763,27 @@ public class RTL2832TunerController extends USBTunerController
         return data;
     }
 
-    /**
-     * Writes a single byte to the 256-byte EEPROM using the specified offset.
-     *
-     * Note: introduce a 5 millisecond delay between each successive write to
-     * the EEPROM or subsequent writes may fail.
-     */
-    public void writeEEPROMByte(byte offset, byte value) throws IllegalArgumentException, UsbDisconnectedException
-    {
-        if(offset < 0 || offset > 255)
-        {
-            throw new IllegalArgumentException("RTL2832 Tuner Controller - EEPROM offset must be within range of 0 - 255");
-        }
-
-        int offsetAndValue = Integer.rotateLeft((0xFF & offset), 8) | (0xFF & value);
-        writeRegister(Block.I2C, Address.EEPROM, offsetAndValue, 2);
-    }
-
     public enum Address
     {
-        USB_SYSCTL(0x2000),
-        USB_CTRL(0x2010),
-        USB_STAT(0x2014),
-        USB_EPA_CFG(0x2144),
-        USB_EPA_CTL(0x2148),
-        USB_EPA_MAXPKT(0x2158),
-        USB_EPA_MAXPKT_2(0x215A),
-        USB_EPA_FIFO_CFG(0x2160),
-        DEMOD_CTL(0x3000),
-        GPO(0x3001),
-        GPI(0x3002),
-        GPOE(0x3003),
-        GPD(0x3004),
-        SYSINTE(0x3005),
-        SYSINTS(0x3006),
-        GP_CFG0(0x3007),
-        GP_CFG1(0x3008),
-        SYSINTE_1(0x3009),
-        SYSINTS_1(0x300A),
-        DEMOD_CTL_1(0x300B),
-        IR_SUSPEND(0x300C),
-        EEPROM(0xA0);
+        USB_SYSCTL(0x2000), USB_CTRL(0x2010), USB_STAT(0x2014),
+        USB_EPA_CFG(0x2144), USB_EPA_CTL(0x2148), USB_EPA_MAXPKT(0x2158),
+        USB_EPA_MAXPKT_2(0x215A), USB_EPA_FIFO_CFG(0x2160), DEMOD_CTL(0x3000),
+        GPO(0x3001), GPI(0x3002), GPOE(0x3003), GPD(0x3004),
+        SYSINTE(0x3005), SYSINTS(0x3006), GP_CFG0(0x3007), GP_CFG1(0x3008),
+        SYSINTE_1(0x3009), SYSINTS_1(0x300A), DEMOD_CTL_1(0x300B),
+        IR_SUSPEND(0x300C), EEPROM(0xA0);
 
         private int mAddress;
-
-        Address(int address)
-        {
-            mAddress = address;
-        }
-
-        public short getAddress()
-        {
-            return (short) mAddress;
-        }
+        Address(int address) { mAddress = address; }
+        public short getAddress() { return (short) mAddress; }
     }
 
     public enum Page
     {
-        ZERO(0x0),
-        ONE(0x1),
-        TEN(0xA);
-
+        ZERO(0x0), ONE(0x1), TEN(0xA);
         private int mPage;
-
-        Page(int page)
-        {
-            mPage = page;
-        }
-
-        public byte getPage()
-        {
-            return (byte) (mPage & 0xFF);
-        }
+        Page(int page) { mPage = page; }
+        public byte getPage() { return (byte) (mPage & 0xFF); }
     }
 
     public enum SampleMode
@@ -1132,58 +793,15 @@ public class RTL2832TunerController extends USBTunerController
 
     public enum Block
     {
-        DEMOD(0),
-        USB(1),
-        SYS(2),
-        TUN(3),
-        ROM(4),
-        IR(5),
-        I2C(6); //I2C controller
-
+        DEMOD(0), USB(1), SYS(2), TUN(3), ROM(4), IR(5), I2C(6);
         private int mValue;
-
-        Block(int value)
-        {
-            mValue = value;
-        }
-
-        public int getValue()
-        {
-            return mValue;
-        }
-
-        /**
-         * Returns the value left shifted 8 bits
-         */
-        public short getReadIndex()
-        {
-            return (short) Integer.rotateLeft(mValue, 8);
-        }
-
-        public short getWriteIndex()
-        {
-            return (short) (getReadIndex() | 0x10);
-        }
+        Block(int value) { mValue = value; }
+        public short getReadIndex() { return (short) Integer.rotateLeft(mValue, 8); }
+        public short getWriteIndex() { return (short) (getReadIndex() | 0x10); }
     }
 
-    /**
-     * Sample rates supported by the RTL-2832.
-     *
-     * Formula to calculate the ratio value:
-     *
-     * ratio = ( ( crystal_frequency * 2^22 ) / sample_rate ) & ~3
-     *
-     * Default crystal_frequency is 28,800,000
-     *
-     * This produces a 32-bit value that has to be set in 2 x 16-bit registers.
-     * Place the high 16-bit value in ratioMSB and the low 16-bit value in
-     * ratioLSB.  Use integer for these values to avoid sign-extension issues.
-     *
-     * Mask the value with 0xFFFF when setting the register.
-     */
     public enum SampleRate
     {
-        /* Note: sample rates below 1.0MHz are subject to aliasing */
         RATE_0_230MHZ(0x1F40, 230400, "0.230 MHz"),
         RATE_0_240MHZ(0x1E00, 240000, "0.240 MHz"),
         RATE_0_256MHZ(0x1C20, 256000, "0.256 MHz"),
@@ -1213,33 +831,11 @@ public class RTL2832TunerController extends USBTunerController
             mLabel = label;
         }
 
-        public int getRatioHighBits()
-        {
-            return mRatioHigh;
-        }
+        public int getRatioHighBits() { return mRatioHigh; }
+        public int getRate() { return mRate; }
+        public String getLabel() { return mLabel; }
+        public String toString() { return mLabel; }
 
-        public int getRate()
-        {
-            return mRate;
-        }
-
-        public String getLabel()
-        {
-            return mLabel;
-        }
-
-        public String toString()
-        {
-            return mLabel;
-        }
-
-        /**
-         * Returns the sample rate that is equal to the argument or the next
-         * higher sample rate
-         *
-         * @param sampleRate
-         * @return
-         */
         public static SampleRate getClosest(int sampleRate)
         {
             for(SampleRate rate : values())
@@ -1249,7 +845,6 @@ public class RTL2832TunerController extends USBTunerController
                     return rate;
                 }
             }
-
             return DEFAULT_SAMPLE_RATE;
         }
     }
@@ -1263,36 +858,13 @@ public class RTL2832TunerController extends USBTunerController
         R820T(0x34, 0x00, 0x69),
         R828D(0x74, 0x00, 0x69);
 
-        private int mI2CAddress;
-        private int mCheckAddress;
-        private int mCheckValue;
-
-        TunerTypeCheck(int i2c, int address, int value)
-        {
-            mI2CAddress = i2c;
-            mCheckAddress = address;
-            mCheckValue = value;
-        }
-
-        public byte getI2CAddress()
-        {
-            return (byte) mI2CAddress;
-        }
-
-        public byte getCheckAddress()
-        {
-            return (byte) mCheckAddress;
-        }
-
-        public byte getCheckValue()
-        {
-            return (byte) mCheckValue;
-        }
+        private int mI2CAddress, mCheckAddress, mCheckValue;
+        TunerTypeCheck(int i2c, int address, int value) { mI2CAddress = i2c; mCheckAddress = address; mCheckValue = value; }
+        public byte getI2CAddress() { return (byte) mI2CAddress; }
+        public byte getCheckAddress() { return (byte) mCheckAddress; }
+        public byte getCheckValue() { return (byte) mCheckValue; }
     }
 
-    /**
-     * RTL2832 EEPROM byte array descriptor parsing class
-     */
     public class Descriptor
     {
         private byte[] mData;
@@ -1300,24 +872,24 @@ public class RTL2832TunerController extends USBTunerController
 
         public Descriptor(byte[] data)
         {
-            if(data != null)
-            {
-                mData = data;
-            }
-            else
-            {
-                data = new byte[256];
-            }
-
+            mData = (data != null) ? data : new byte[256];
             getLabels();
         }
 
-        /**
-         * Indicates if this is a rtl-sdr.com V4 R828D dongle with notch filtering.
-         */
         public boolean isRtlSdrV4()
         {
-            return "RTLSDRBlog".equals(getVendorLabel()) && "Blog V4".equals(getProductLabel());
+            String vendor = getVendorLabel();
+            String product = getProductLabel();
+            return vendor != null && vendor.contains("RTLSDRBlog") && product != null && product.contains("Blog V4") && !product.contains("V4L");
+        }
+
+        /**
+         * Robust detection for V4L: checks if the product label contains "V4L" (case-insensitive)
+         */
+        public boolean isRtlSdrV4L()
+        {
+            String product = getProductLabel();
+            return product != null && product.toUpperCase().contains("V4L");
         }
 
         public boolean isValid()
@@ -1333,7 +905,7 @@ public class RTL2832TunerController extends USBTunerController
 
         public String getVendorLabel()
         {
-            return mLabels.get(0);
+            return mLabels.isEmpty() ? "" : mLabels.get(0);
         }
 
         public String getProductID()
@@ -1344,7 +916,7 @@ public class RTL2832TunerController extends USBTunerController
 
         public String getProductLabel()
         {
-            return mLabels.get(1);
+            return mLabels.size() < 2 ? "" : mLabels.get(1);
         }
 
         public boolean hasSerial()
@@ -1354,7 +926,7 @@ public class RTL2832TunerController extends USBTunerController
 
         public String getSerial()
         {
-            return mLabels.get(2);
+            return mLabels.size() < 3 ? "" : mLabels.get(2);
         }
 
         public boolean remoteWakeupEnabled()
@@ -1381,218 +953,99 @@ public class RTL2832TunerController extends USBTunerController
 
         private int getLabel(int start)
         {
-            /* Validate length and check second byte for ETX (0x03) */
             if(start > 254 || mData[start + 1] != (byte) 0x03)
             {
                 return 256;
             }
-
-            /* Get label length, including the length and ETX bytes */
             int length = 0xFF & mData[start];
-
             if(start + length > 255)
             {
                 return 256;
             }
-
-            /* Get the label bytes */
             byte[] data = Arrays.copyOfRange(mData, start + 2, start + length);
-
-            /* Translate the bytes as UTF-16 Little Endian and store the label */
             String label = new String(data, Charset.forName("UTF-16LE"));
             mLabels.add(label);
             return start + length;
         }
-
-        public String toString()
-        {
-            StringBuilder sb = new StringBuilder();
-            sb.append("RTL-2832 EEPROM Descriptor\n");
-
-            sb.append("Vendor: ");
-            sb.append(getVendorID());
-            sb.append(" [");
-            sb.append(getVendorLabel());
-            sb.append("]\n");
-
-            sb.append("Product: ");
-            sb.append(getProductID());
-            sb.append(" [");
-            sb.append(getProductLabel());
-            sb.append("]\n");
-
-            sb.append("Serial: ");
-            if(hasSerial())
-            {
-                sb.append("yes [");
-                sb.append(getSerial());
-                sb.append("]\n");
-            }
-            else
-            {
-                sb.append("no\n");
-            }
-
-            sb.append("Remote Wakeup Enabled: ");
-            sb.append((remoteWakeupEnabled() ? "yes" : "no"));
-            sb.append("\n");
-
-            sb.append("IR Enabled: ");
-            sb.append((irEnabled() ? "yes" : "no"));
-            sb.append("\n");
-
-            if(mLabels.size() > 3)
-            {
-                sb.append("Additional Labels: ");
-
-                for(int x = 3; x < mLabels.size(); x++)
-                {
-                    sb.append(" [");
-                    sb.append(mLabels.get(x));
-                    sb.append("\n");
-                }
-            }
-
-            return sb.toString();
-        }
     }
 
-    /**
-     * Adapter that provides access to the private methods of this RTL2832 USB tuner device's USB and other interfaces.
-     *
-     * Note: most of the methods exposed by this tuner are private in the tuner controller class by design to prevent
-     * the user from incorrectly accessing them.  This private adapter exposes these as public methods that the various
-     * RTL2832 tuner implementations need access to.
-     */
     public class ControllerAdapter
     {
         private RTL2832TunerController mController;
 
-        /**
-         * Constructs an instance
-         * @param controller for this adapter
-         */
         public ControllerAdapter(RTL2832TunerController controller)
         {
             mController = controller;
         }
 
-        /**
-         * Indicates if the tuner controller is running and that the Device Handle is active.
-         */
+        public void setGpioPin(int pin, boolean enabled) throws LibUsbException
+        {
+            byte mask = (byte) (1 << pin);
+            mController.setGPIOOutput(mask);
+            mController.setGPIOBit(mask, enabled);
+        }
+
         public boolean isRunning()
         {
             return mController.isRunning();
         }
 
-        /**
-         * Indicates if this is a rtl-sdr.com V4 dongle with support for notch filtering.
-         * @return true if this is a V4 R828D tuner.
-         */
         public boolean isV4Dongle()
         {
-            return mController.getDescriptor().isRtlSdrV4();
+            return mController.getDescriptor() != null && mController.getDescriptor().isRtlSdrV4();
         }
 
-        /**
-         * Device handle for the tuner controller.
-         * @return
-         */
+        public boolean isV4LDongle()
+        {
+            return mController.getDescriptor() != null && mController.getDescriptor().isRtlSdrV4L();
+        }
+
         public DeviceHandle getDeviceHandle()
         {
             return mController.getDeviceHandle();
         }
 
-        /**
-         * Thread lock for controlling access to configuration changes that require multiple USB control message
-         * sequences.
-         *
-         * @return lock.
-         */
         public ReentrantLock getLock()
         {
             return mController.getLock();
         }
 
-        /**
-         * Enables the I2C repeater
-         */
         public void enableI2CRepeater()
         {
             mController.enableI2CRepeater(true);
         }
 
-        /**
-         * Disables the I2C repeater
-         */
         public void disableI2CRepeater()
         {
             mController.enableI2CRepeater(false);
         }
 
-        /**
-         * Indicates if the I2C repeater is enabled
-         */
         public boolean isI2CRepeaterEnabled()
         {
             return mController.isI2CRepeaterEnabled();
         }
 
-        /**
-         * Writes to the Demod registers
-         * @param page value
-         * @param address value
-         * @param value to write
-         * @param length of the value in bytes
-         * @throws LibUsbException if there is an error
-         */
         public void writeDemodRegister(Page page, short address, int value, int length) throws LibUsbException
         {
             mController.writeDemodRegister(page, address, value, length);
         }
 
-        /**
-         * Writes to the I2C register
-         * @param i2CAddress address
-         * @param i2CRegister register
-         * @param value to write
-         * @param controlI2CRepeater true to turn on/off the I2C repeater, or false if it's already been turned on.
-         * @throws LibUsbException if there is an error
-         */
         public void writeI2CRegister(byte i2CAddress, byte i2CRegister, byte value, boolean controlI2CRepeater)
                 throws LibUsbException
         {
             mController.writeI2CRegister(i2CAddress, i2CRegister, value, controlI2CRepeater);
         }
 
-        /**
-         * Reads the I2C register
-         * @param i2CAddress address
-         * @param i2CRegister register
-         * @param controlI2CRepeater to control the I2C repeater
-         * @return value
-         * @throws LibUsbException if there is an error
-         */
         public int readI2CRegister(byte i2CAddress, byte i2CRegister, boolean controlI2CRepeater) throws LibUsbException
         {
             return mController.readI2CRegister(i2CAddress, i2CRegister, controlI2CRepeater);
         }
 
-        /**
-         * Reads a value
-         * @param address to read
-         * @param block at the address
-         * @param buffer to read the value into
-         * @throws LibUsbException
-         */
         public void read(short address, Block block, ByteBuffer buffer) throws LibUsbException
         {
             mController.read(address, block, buffer);
         }
 
-        /**
-         * Sets the intermediate frequency (IF) for the digitizer
-         */
         public void setIFFrequency(int frequency)
         {
             mController.setIFFrequency(frequency);
